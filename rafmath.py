@@ -3,12 +3,14 @@ import math
 #
 # EOF (end-of-file) token is used to indicate that
 # there is no more input left for lexical analysis
-REAL, INTEGER, PLUS, MINUS, MUL, DIV, EOF, POPEN, PCLOSE, EQ, LOG_EQ, LOG_LEQ, LOG_LT, LOG_GT, LOG_GEQ, VAR, SQRT = (
-    'REAL', 'INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF', 'POPEN', 'PCLOSE', 'EQ', 'LOG_EQ', 'LOG_LEQ', 'LOG_LT', 'LOG_GT', 'LOG_GEQ', 'VAR', 'SQRT'
+REAL, INTEGER, PLUS, MINUS, MUL, DIV, EOF, POPEN, PCLOSE, EQ, LOG_EQ, LOG_LEQ, LOG_LT, LOG_GT, LOG_GEQ, VAR, SQRT, LOG, SIN, COS, TAN, CTG, COMMA, POW = (
+    'REAL', 'INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF', 'POPEN', 'PCLOSE', 'EQ', 'LOG_EQ', 'LOG_LEQ', 'LOG_LT', 'LOG_GT', 'LOG_GEQ', 'VAR', 'SQRT', 'LOG', 'SIN', 'COS', 'TAN', 'CTG', 'COMMA', 'POW'
 )
 
-MATH_KEYWORDS = ['SQRT']
+FUNCTION_NAMES = ['SQRT', 'LOG', 'POW', 'SIN', 'COS', 'TAN', 'CTG']
 
+
+# Dictionary that stores the variables used in the shell
 variables = {}
 
 
@@ -34,6 +36,8 @@ class Token(object):
     def __repr__(self):
         return self.__str__()
 
+class VarException(Exception):
+    pass
 
 
 class Lexer(object):
@@ -61,7 +65,11 @@ class Lexer(object):
             self.advance()
 
     def number(self):
-        """Return a (multidigit) integer consumed from the input."""
+        '''
+
+        :return: checks if a multinumber is float or integer, and returns the correct type
+                 works with floats without an integer part
+        '''
         result = ''
         while self.current_char is not None and self.current_char.isdigit():
             result += self.current_char
@@ -83,6 +91,32 @@ class Lexer(object):
             self.advance()
         return result
 
+    def function_token(self, id):
+        '''
+        Connects a function name with it's token
+        :param id: name of function
+        :return: token correpsonding to the function name
+        '''
+
+        if id == 'SQRT':
+            return Token(SQRT, id)
+        if id == 'LOG':
+            return Token(LOG, id)
+        if id == 'TAN':
+            return Token(TAN, id)
+        if id == 'SIN':
+            return Token(SIN, id)
+        if id == 'COS':
+            return Token(COS, id)
+        if id == 'SIN':
+            return Token(SIN, id)
+        if id == 'CTG':
+            return Token(CTG, id)
+        if id == 'POW':
+            return Token(POW, id)
+        else:
+            return self.error()
+
 
     def get_next_token(self):
         """Lexical analyzer (also known as scanner or tokenizer)
@@ -93,9 +127,10 @@ class Lexer(object):
 
             if self.current_char.isalpha():
                 id = self.identifier()
-                if id == 'SQRT':
-                    return Token(SQRT, id)
-                return Token(VAR, id)
+                if id in FUNCTION_NAMES:
+                    return self.function_token(id)
+                else:
+                    return Token(VAR, id)
 
             if self.current_char.isspace():
                 self.skip_whitespace()
@@ -112,6 +147,10 @@ class Lexer(object):
             if self.current_char == ')':
                 self.advance()
                 return Token(PCLOSE, ')')
+
+            if self.current_char == ',':
+                self.advance()
+                return Token(COMMA, ',')
 
             if self.current_char == '+':
                 self.advance()
@@ -165,9 +204,10 @@ class Interpreter(object):
         raise Exception('Invalid syntax')
 
     def var_error(self, var):
-        raise Exception('No such variable: ' + var)
+        raise VarException('No such variable: ' + var)
 
     def eat_var(self, var):
+        '''Validates is the variable is in declared variables'''
         if var not in variables:
             self.var_error(var)
 
@@ -181,24 +221,80 @@ class Interpreter(object):
         else:
             self.error()
 
-    # def variable(self):
-    #     self.factor()
-    #
-    #     token = self.current_token
-    #     if token.type == VAR:
-    #         self.eat(VAR)
-    #         return self.variables[token.value]
-
-
-    def factor(self):
-        """factor : INTEGER | REAL"""
-        token = self.current_token
-        if token.type == SQRT:
+    def handle_function(self, token_type):
+        '''Handles the functions declared so far in our grammar.
+        Function needs to be declared in FUNCTION_NAMES
+        '''
+        if token_type == 'SQRT':
             self.eat(SQRT)
             self.eat(POPEN)
             result = math.sqrt(self.expr())
             self.eat(PCLOSE)
-            return round(result, 3)
+            return result
+
+        # Syntax: LOG(X, base) or LOG(X), where base is 10 by default
+        if token_type == 'LOG':
+            self.eat(LOG)
+            self.eat(POPEN)
+            left = self.expr()
+            if self.current_token.type == COMMA:
+                self.eat(COMMA)
+                right = self.expr()
+            else:
+                right = 10
+            result = math.log(left, right)
+            self.eat(PCLOSE)
+            return result
+
+        if token_type == 'TAN':
+            self.eat(TAN)
+            self.eat(POPEN)
+            result = math.tan(self.expr())
+            self.eat(PCLOSE)
+            return result
+
+        if token_type == 'SIN':
+            self.eat(SIN)
+            self.eat(POPEN)
+            result = math.sin(self.expr())
+            self.eat(PCLOSE)
+            return result
+
+        if token_type == 'COS':
+            self.eat(SIN)
+            self.eat(POPEN)
+            result = math.cos(self.expr())
+            self.eat(PCLOSE)
+            return result
+
+        if token_type == 'CTG':
+            self.eat(SIN)
+            self.eat(POPEN)
+            result = 1 / math.tan(self.expr())
+            self.eat(PCLOSE)
+            return result
+
+        # Syntax: POW(X, exp) or POW(X), where exp is 2 by default
+        if token_type == 'POW':
+            self.eat(POW)
+            self.eat(POPEN)
+            left = self.expr()
+            if self.current_token.type == COMMA:
+                self.eat(COMMA)
+                right = self.expr()
+            else:
+                right = 2
+            self.eat(PCLOSE)
+            return math.pow(left, right)
+
+
+
+    def factor(self):
+        """factor : INTEGER | REAL | FUNCTION | VAR"""
+        token = self.current_token
+
+        if token.type in FUNCTION_NAMES:
+            return self.handle_function(token.type)
 
         if token.type == POPEN:
             self.eat(POPEN)
@@ -218,6 +314,7 @@ class Interpreter(object):
 
 
     def unary(self):
+        '''unary: MINUS? factor'''
         token = self.current_token
         minus_eaten = 1
         if token.type == MINUS:
@@ -277,7 +374,8 @@ class Interpreter(object):
         logical: term ((LOG_LEQ | LOG_EQ | LOG_GEQ | LOG_GT | LOG_LT) term)*
         term   : unary ((MUL | DIV) unary)*
         unary  : MINUS? INTEGER
-        factor : (POPENexprPCLOSE) | INTEGER | REAL | VAR
+        factor : (POPEN expr PCLOSE) | INTEGER | REAL | VAR | FUNCTION
+        :return rounded result to 3 decimals
         """
         result = self.logical()
 
@@ -290,19 +388,29 @@ class Interpreter(object):
                 self.eat(MINUS)
                 result = result - self.logical()
 
-        return result
+        return round(result, 3)
 
 
     def statement(self):
+        '''
+        Top-level statement, just as prompted from the shell
+
+        statement: (VAR ASSIGN)? expr
+        :return: result of the expression if it's not assignment statement
+        '''
         text = self.lexer.text
         flag = False
+
+        ## checking if it's assignment statemnt
         for i in range(len(text) - 1):
             if text[i] == '=' and text[i+1] != '=':
                 flag = True
 
+        # Expression
         if not flag:
             return self.expr()
 
+        # Assignment
         else:
             token = self.current_token
             self.eat(VAR)
@@ -324,7 +432,11 @@ def main():
             continue
         lexer = Lexer(text)
         interpreter = Interpreter(lexer)
-        result = interpreter.statement()
+        try:
+            result = interpreter.statement()
+        except VarException as e:
+            print(str(e))
+            continue
         if result is not None:
             print(result)
 
