@@ -1,10 +1,15 @@
+import math
 # Token types
 #
 # EOF (end-of-file) token is used to indicate that
 # there is no more input left for lexical analysis
-REAL, INTEGER, PLUS, MINUS, MUL, DIV, EOF, POPEN, PCLOSE, EQ, LOG_EQ, LOG_LEQ, LOG_LT, LOG_GT, LOG_GEQ, VAR = (
-    'REAL', 'INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF', 'POPEN', 'PCLOSE', 'EQ', 'LOG_EQ', 'LOG_LEQ', 'LOG_LT', 'LOG_GT', 'LOG_GEQ', 'VAR'
+REAL, INTEGER, PLUS, MINUS, MUL, DIV, EOF, POPEN, PCLOSE, EQ, LOG_EQ, LOG_LEQ, LOG_LT, LOG_GT, LOG_GEQ, VAR, SQRT = (
+    'REAL', 'INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF', 'POPEN', 'PCLOSE', 'EQ', 'LOG_EQ', 'LOG_LEQ', 'LOG_LT', 'LOG_GT', 'LOG_GEQ', 'VAR', 'SQRT'
 )
+
+MATH_KEYWORDS = ['SQRT']
+
+variables = {}
 
 
 class Token(object):
@@ -16,7 +21,6 @@ class Token(object):
 
     def __str__(self):
         """String representation of the class instance.
-
         Examples:
             Token(INTEGER, 3)
             Token(PLUS, '+')
@@ -31,6 +35,7 @@ class Token(object):
         return self.__str__()
 
 
+
 class Lexer(object):
     def __init__(self, text):
         # client string input, e.g. "3 * 5", "12 / 3 * 4", etc
@@ -38,6 +43,7 @@ class Lexer(object):
         # self.pos is an index into self.text
         self.pos = 0
         self.current_char = self.text[self.pos]
+
 
     def error(self):
         raise Exception('Invalid character')
@@ -80,7 +86,6 @@ class Lexer(object):
 
     def get_next_token(self):
         """Lexical analyzer (also known as scanner or tokenizer)
-
         This method is responsible for breaking a sentence
         apart into tokens. One token at a time.
         """
@@ -88,13 +93,15 @@ class Lexer(object):
 
             if self.current_char.isalpha():
                 id = self.identifier()
+                if id == 'SQRT':
+                    return Token(SQRT, id)
                 return Token(VAR, id)
 
             if self.current_char.isspace():
                 self.skip_whitespace()
                 continue
 
-            if self.current_char.isdigit():
+            if self.current_char.isdigit() or self.current_char == '.':
                 tkn = self.number()
                 return Token(tkn[0], tkn[1])
 
@@ -153,8 +160,6 @@ class Interpreter(object):
         self.lexer = lexer
         # set current token to the first token taken from the input
         self.current_token = self.lexer.get_next_token()
-        self.variables = {}
-        self.variables['x'] = 5
 
     def error(self):
         raise Exception('Invalid syntax')
@@ -163,7 +168,7 @@ class Interpreter(object):
         raise Exception('No such variable: ' + var)
 
     def eat_var(self, var):
-        if var not in self.variables:
+        if var not in variables:
             self.var_error(var)
 
     def eat(self, token_type):
@@ -188,6 +193,13 @@ class Interpreter(object):
     def factor(self):
         """factor : INTEGER | REAL"""
         token = self.current_token
+        if token.type == SQRT:
+            self.eat(SQRT)
+            self.eat(POPEN)
+            result = math.sqrt(self.expr())
+            self.eat(PCLOSE)
+            return round(result, 3)
+
         if token.type == POPEN:
             self.eat(POPEN)
             result = self.expr()
@@ -202,7 +214,7 @@ class Interpreter(object):
         elif token.type == VAR:
             self.eat(VAR)
             self.eat_var(token.value)
-            return self.variables[token.value]
+            return variables[token.value]
 
 
     def unary(self):
@@ -211,8 +223,10 @@ class Interpreter(object):
         if token.type == MINUS:
             self.eat(MINUS)
             minus_eaten = -1
+        if token.type == PLUS:
+            self.eat(PLUS)
+        return self.factor() * minus_eaten
 
-        return self.factor()  * minus_eaten
 
     def term(self):
         """term : factor ((MUL | DIV) factor)*"""
@@ -257,10 +271,8 @@ class Interpreter(object):
 
     def expr(self):
         """Arithmetic expression parser / interpreter.
-
         >  14 + 2 * 3 - 6 / 2`
         17
-
         expr   : logical ((PLUS | MINUS) logical)*
         logical: term ((LOG_LEQ | LOG_EQ | LOG_GEQ | LOG_GT | LOG_LT) term)*
         term   : unary ((MUL | DIV) unary)*
@@ -280,26 +292,24 @@ class Interpreter(object):
 
         return result
 
-    def statement(self):
 
-        token = self.current_token
-        if token.type == VAR:
-            self.eat(VAR)
-            if self.current_token.type == EOF or self.current_token.type != EQ:
-                return self.expr()
-            else:
-                self.eat(EQ)
-                ret = self.expr()
-                self.variables[token.value] = ret
-        else:
+    def statement(self):
+        text = self.lexer.text
+        flag = False
+        for i in range(len(text) - 1):
+            if text[i] == '=' and text[i+1] != '=':
+                flag = True
+
+        if not flag:
             return self.expr()
 
-
-
-
-
-
-
+        else:
+            token = self.current_token
+            self.eat(VAR)
+            self.eat(EQ)
+            result = self.expr()
+            variables[token.value] = result
+            return None
 
 
 def main():
@@ -315,7 +325,8 @@ def main():
         lexer = Lexer(text)
         interpreter = Interpreter(lexer)
         result = interpreter.statement()
-        print(result)
+        if result is not None:
+            print(result)
 
 
 if __name__ == '__main__':
