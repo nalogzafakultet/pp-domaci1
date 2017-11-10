@@ -340,10 +340,10 @@ class Interpreter(object):
 
         return result
 
-    def logical(self):
-        '''logical : term ((LOG_LEQ | LOG_GEQ | LOG_EQ | LOG_GT | LOG_LT) term)* '''
+    def expr(self):
+        '''expr : plus_minus ((LOG_LEQ | LOG_GEQ | LOG_EQ | LOG_GT | LOG_LT) plus_minus)* '''
 
-        result = self.term()
+        result = self.plus_minus()
 
         while self.current_token.type in (LOG_GEQ, LOG_LEQ, LOG_EQ, LOG_GT, LOG_LT):
             token = self.current_token
@@ -366,27 +366,27 @@ class Interpreter(object):
         return result
 
 
-    def expr(self):
+    def plus_minus(self):
         """Arithmetic expression parser / interpreter.
         >  14 + 2 * 3 - 6 / 2`
         17
-        expr   : logical ((PLUS | MINUS) logical)*
-        logical: term ((LOG_LEQ | LOG_EQ | LOG_GEQ | LOG_GT | LOG_LT) term)*
+        expr: plus_minus ((LOG_LEQ | LOG_EQ | LOG_GEQ | LOG_GT | LOG_LT) plus_minus)*
+        plus_minus   : term ((PLUS | MINUS) term)*
         term   : unary ((MUL | DIV) unary)*
         unary  : MINUS? INTEGER
         factor : (POPEN expr PCLOSE) | INTEGER | REAL | VAR | FUNCTION
         :return rounded result to 3 decimals
         """
-        result = self.logical()
+        result = self.term()
 
         while self.current_token.type in (PLUS, MINUS):
             token = self.current_token
             if token.type == PLUS:
                 self.eat(PLUS)
-                result = result + self.logical()
+                result = result + self.plus_minus()
             elif token.type == MINUS:
                 self.eat(MINUS)
-                result = result - self.logical()
+                result = result - self.plus_minus()
 
         return round(result, 3)
 
